@@ -1,0 +1,366 @@
+{
+  "name": "W2-D1-CA1-Defect Triage AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Form Submission",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Input File",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5202ba5d-b718-44ca-b22c-e5787c25a4c5",
+      "name": "On form submission",
+      "webhookId": "d32d33f2-a665-4781-b388-e7e48637c4b6"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "Input_File",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "202431a8-8444-4d3c-aef5-d6c4cefafe28",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nfunction inflateRaw(input) {\n  const MAXBITS = 15, MAXDCODES = 30, FIXLCODES = 288;\n\n  let outCap = Math.max(input.length * 4, 1024);\n  let out = new Uint8Array(outCap);\n  let outCnt = 0;\n  function ensure(extra) {\n    if (outCnt + extra > out.length) {\n      let cap = out.length * 2;\n      while (cap < outCnt + extra) cap *= 2;\n      const bigger = new Uint8Array(cap);\n      bigger.set(out.subarray(0, outCnt));\n      out = bigger;\n    }\n  }\n  function putByte(b) { ensure(1); out[outCnt++] = b; }\n\n  let inCnt = 0, bitBuf = 0, bitCnt = 0;\n  function bits(need) {\n    let val = bitBuf;\n    while (bitCnt < need) {\n      val |= input[inCnt++] << bitCnt;\n      bitCnt += 8;\n    }\n    bitBuf = val >> need;\n    bitCnt -= need;\n    return val & ((1 << need) - 1);\n  }\n\n  function construct(lengths, n) {\n    const count = new Array(MAXBITS + 1).fill(0);\n    for (let symbol = 0; symbol < n; symbol++) count[lengths[symbol]]++;\n    if (count[0] === n) return { count, symbol: [] };\n    const offs = new Array(MAXBITS + 2).fill(0);\n    for (let len = 1; len < MAXBITS; len++) offs[len + 1] = offs[len] + count[len];\n    const symbol = new Array(n).fill(0);\n    for (let sym = 0; sym < n; sym++) {\n      if (lengths[sym] !== 0) symbol[offs[lengths[sym]]++] = sym;\n    }\n    return { count, symbol };\n  }\n\n  function decodeSym(h) {\n    let code = 0, first = 0, index = 0;\n    for (let len = 1; len <= MAXBITS; len++) {\n      code |= bits(1);\n      const count = h.count[len];\n      if (code - first < count) return h.symbol[index + (code - first)];\n      index += count;\n      first += count;\n      first <<= 1;\n      code <<= 1;\n    }\n    throw new Error('invalid deflate code');\n  }\n\n  const lengthBase = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];\n  const lengthExtra = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];\n  const distBase = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];\n  const distExtra = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];\n  const clOrder = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];\n\n  function codes(lencode, distcode) {\n    let symbol;\n    do {\n      symbol = decodeSym(lencode);\n      if (symbol < 256) {\n        putByte(symbol);\n      } else if (symbol > 256) {\n        symbol -= 257;\n        const len = lengthBase[symbol] + bits(lengthExtra[symbol]);\n        const dsym = decodeSym(distcode);\n        const dist = distBase[dsym] + bits(distExtra[dsym]);\n        ensure(len);\n        for (let i = 0; i < len; i++) {\n          out[outCnt] = out[outCnt - dist];\n          outCnt++;\n        }\n      }\n    } while (symbol !== 256);\n  }\n\n  function stored() {\n    bitBuf = 0; bitCnt = 0;\n    let len = input[inCnt++] | (input[inCnt++] << 8);\n    const nlen = input[inCnt++] | (input[inCnt++] << 8);\n    if ((len & 0xffff) !== ((~nlen) & 0xffff)) throw new Error('stored block length mismatch');\n    ensure(len);\n    while (len--) out[outCnt++] = input[inCnt++];\n  }\n\n  function fixedBlock() {\n    const lengths = new Array(FIXLCODES).fill(0);\n    let symbol = 0;\n    for (; symbol < 144; symbol++) lengths[symbol] = 8;\n    for (; symbol < 256; symbol++) lengths[symbol] = 9;\n    for (; symbol < 280; symbol++) lengths[symbol] = 7;\n    for (; symbol < FIXLCODES; symbol++) lengths[symbol] = 8;\n    const lencode = construct(lengths, FIXLCODES);\n    const distcode = construct(new Array(MAXDCODES).fill(5), MAXDCODES);\n    codes(lencode, distcode);\n  }\n\n  function dynamicBlock() {\n    const nlen = bits(5) + 257;\n    const ndist = bits(5) + 1;\n    const ncode = bits(4) + 4;\n    const lengths = new Array(nlen + ndist).fill(0);\n    const clLengths = new Array(19).fill(0);\n    for (let i = 0; i < ncode; i++) clLengths[clOrder[i]] = bits(3);\n    const clcode = construct(clLengths, 19);\n\n    let index = 0;\n    while (index < nlen + ndist) {\n      let symbol = decodeSym(clcode);\n      if (symbol < 16) {\n        lengths[index++] = symbol;\n      } else {\n        let len = 0, repeat;\n        if (symbol === 16) { len = lengths[index - 1]; repeat = 3 + bits(2); }\n        else if (symbol === 17) { repeat = 3 + bits(3); }\n        else { repeat = 11 + bits(7); }\n        while (repeat--) lengths[index++] = len;\n      }\n    }\n\n    const lencode = construct(lengths.slice(0, nlen), nlen);\n    const distcode = construct(lengths.slice(nlen), ndist);\n    codes(lencode, distcode);\n  }\n\n  let last;\n  do {\n    last = bits(1);\n    const type = bits(2);\n    if (type === 0) stored();\n    else if (type === 1) fixedBlock();\n    else if (type === 2) dynamicBlock();\n    else throw new Error('invalid block type');\n  } while (!last);\n\n  return out.subarray(0, outCnt);\n}\n\n\nfunction readZipEntries(buf) {\n  const entries = {};\n  let offset = 0;\n  const LOCAL_SIG = 0x04034b50;\n  while (offset < buf.length - 4) {\n    if (buf.readUInt32LE(offset) !== LOCAL_SIG) break;\n    const compressionMethod = buf.readUInt16LE(offset + 8);\n    const compSize = buf.readUInt32LE(offset + 18);\n    const nameLen = buf.readUInt16LE(offset + 26);\n    const extraLen = buf.readUInt16LE(offset + 28);\n    const nameStart = offset + 30;\n    const name = buf.slice(nameStart, nameStart + nameLen).toString('utf8');\n    const dataStart = nameStart + nameLen + extraLen;\n    const compData = buf.slice(dataStart, dataStart + compSize);\n\n    let content;\n    if (compressionMethod === 0) content = compData;\n    else if (compressionMethod === 8) content = Buffer.from(inflateRaw(new Uint8Array(compData)));\n    else throw new Error(`Unsupported compression method ${compressionMethod} for ${name}`);\n\n    entries[name] = content.toString('utf8');\n    offset = dataStart + compSize;\n  }\n  return entries;\n}\n\n\nfunction stripAnsi(str) {\n  if (!str) return str;\n  return str.replace(/\\u001b\\[[0-9;]*m/g, '');\n}\n\nfunction collectStepErrors(steps, seen, out) {\n  if (!steps) return;\n  for (const step of steps) {\n    if (step.error !== undefined && step.error !== null) {\n      const raw = typeof step.error === 'string' ? step.error : step.error.message;\n      const msg = stripAnsi(raw);\n      if (msg && !seen.has(msg)) { seen.add(msg); out.push(msg); }\n    }\n    if (step.steps) collectStepErrors(step.steps, seen, out);\n  }\n}\n\n\nfunction extractDataUri(html) {\n  let m = html.match(/<script id=\"playwrightReportBase64\" type=\"application\\/zip\">([\\s\\S]*?)<\\/script>/);\n  if (m) return m[1].trim();\n  m = html.match(/<template id=\"playwrightReportBase64\">([\\s\\S]*?)<\\/template>/);\n  if (m) return m[1].trim();\n  return null;\n}\n\n// ---------------------------------------------------------------\n// Main\n// ---------------------------------------------------------------\nconst html = $input.first().json.data;\n\nconst dataUri = extractDataUri(html);\nif (!dataUri) throw new Error('Could not find the playwrightReportBase64 data (checked both <script type=\"application/zip\"> and <template> formats)');\n\nconst commaIdx = dataUri.indexOf(',');\nconst base64Zip = commaIdx !== -1 ? dataUri.slice(commaIdx + 1) : dataUri;\nconst zipBuffer = Buffer.from(base64Zip, 'base64');\n\nconst zipEntries = readZipEntries(zipBuffer);\n\nif (!zipEntries['report.json']) throw new Error('report.json not found inside the zip');\nconst report = JSON.parse(zipEntries['report.json']);\n\nconst suiteFiles = {};\nfor (const file of report.files || []) {\n  const fname = `${file.fileId}.json`;\n  if (zipEntries[fname]) suiteFiles[file.fileId] = JSON.parse(zipEntries[fname]);\n}\n\nconst FAILING = new Set(['unexpected', 'failed', 'flaky', 'timedOut']);\nconst failures = [];\n\nfor (const fileMeta of report.files || []) {\n  const suite = suiteFiles[fileMeta.fileId];\n  if (!suite) continue;\n  for (const test of suite.tests || []) {\n    if (!FAILING.has(test.outcome)) continue;\n    for (const result of test.results || []) {\n      const seen = new Set();\n      const errors = [];\n      for (const err of result.errors || []) {\n        const msg = stripAnsi(err.message);\n        if (msg && !seen.has(msg)) { seen.add(msg); errors.push(msg); }\n      }\n        if (errors.length === 0) {\n        collectStepErrors(result.steps, seen, errors);\n      }\n      if (errors.length) {\n        failures.push({ file: test.location.file, line: test.location.line, title: test.title, errors });\n      }\n    }\n  }\n}\n\nlet output;\nconst totalErrors = failures.reduce((n, f) => n + f.errors.length, 0);\n\nif (totalErrors === 0) {\n  output = 'No errors found.';\n} else if (failures.length === 1 && failures[0].errors.length === 1) {\n  output = '```\\n' + failures[0].errors[0] + '\\n```';\n} else {\n  const blocks = [];\n  for (const f of failures) {\n    for (const err of f.errors) {\n      blocks.push(`${f.file}:${f.line} — ${f.title}\\n\\`\\`\\`\\n${err}\\n\\`\\`\\``);\n    }\n  }\n  output = blocks.join('\\n\\n');\n}\n\nreturn [{ json: { output } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "efcf8e3f-42a5-4e5b-acd2-eb0c30014583",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# ROLE\nSenior QA Automation Triage Engineer. Skeptical by default — only classify as a bug if the error text proves it. Ambiguous evidence = lower confidence, never assume actionable.\n\n# TASK\nClassify into ONE category:\n- Genuine Defect (actionable): app produced factually wrong output/behavior, no data/timing/env/locator issue in evidence.\n- Product Bug (actionable): same bar as Genuine Defect, tied to a specific business-logic violation (wrong value/state/workflow step).\n- Flaky Test (not actionable): race condition, timing-sensitive, no functional evidence of a real defect.\n- Environment Issue (not actionable): browser/driver crash, service down, config/infra failure.\n- Network Issue (not actionable): connection refused/DNS/timeout to a dependency, ERR_CONNECTION_*, unrelated 5xx.\n- Expired Data (not actionable): stale/invalid/missing test data (expired token, duplicate unique field, deleted record).\n- Locator Change (not actionable): selector no longer resolves (element not found/strict mode violation), no app error underneath.\n\nSignals: Timeout+selector, no app error -> Locator/Flaky. net::ERR_*/ECONNREFUSED -> Network. undefined/null passed into an action from helper/page-object -> Expired Data. Valid app response with wrong value after a clean flow -> Genuine Defect/Product Bug. Browser/worker crash, \"Executable doesn't exist\" -> Environment Issue.\nAmbiguous evidence -> pick the not-actionable option and lower confidence. Never default to actionable.\n\n# CONFIDENCE (0-100)\n90-100 unambiguous cause named directly. 70-89 strong signal, some inference. 40-69 competing explanations. 0-39 little signal.\nneeds_human_review = true if confidence_score < 70.\n\n# JIRA\nFill jira fields only if classification is Genuine Defect/Product Bug AND confidence_score >= 70; else should_create=false, other jira fields \"\" / [].\nsummary: \"[Automation] <defect> — <test title>\" (<=120 chars).\ndescription: sections \"Summary / Steps to Reproduce / Expected Result / Actual Result / Test Reference (file:line, title)\". If steps beyond the assertion aren't inferable, write \"See test source at <file>:<line>\".\npriority: Highest=crash/data loss/security, High=broken core flow no workaround, Medium=default confirmed defect. Never Low.\nlabels: always \"automated-triage\" + 1-3 relevant tags.\n\n# OUTPUT\nReturn ONLY this JSON, no fences, no extra text:\n{\"classification\":\"Genuine Defect|Product Bug|Flaky Test|Environment Issue|Network Issue|Expired Data|Locator Change\",\"is_actionable\":bool,\"confidence_score\":0-100,\"confidence_level\":\"High|Medium|Low\",\"needs_human_review\":bool,\"reasoning\":\"1-3 sentences, quote evidence\",\"evidence\":[\"...\"],\"recommended_action\":\"Create Jira ticket|Retry / mark test as flaky|Escalate to DevOps|Investigate network/service dependency|Refresh test data|Update locator|Manual review required\",\"jira\":{\"should_create\":bool,\"summary\":\"\",\"description\":\"\",\"priority\":\"\",\"labels\":[]}}\n\n# EXAMPLE\nInput: Test \"User can update profile email\" at tests/profile/update-email.spec.ts:22. Error: expect(locator).toHaveText(expected); Expected \"Email updated successfully\"; Received \"Email already in use\".\nOutput: {\"classification\":\"Expired Data\",\"is_actionable\":false,\"confidence_score\":78,\"confidence_level\":\"Medium\",\"needs_human_review\":false,\"reasoning\":\"App returned a valid business-rule message 'Email already in use', not an error — seed email was already registered.\",\"evidence\":[\"Received string: \\\"Email already in use\\\"\"],\"recommended_action\":\"Refresh test data\",\"jira\":{\"should_create\":false,\"summary\":\"\",\"description\":\"\",\"priority\":\"\",\"labels\":[]}}\n\n# INPUT\nTest title: Playwright error\nFile: {{ $('On form submission').item.json.TRACE[0].filename }}\nError text:\n{{ $json.output }}\n",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        0
+      ],
+      "id": "61ec192c-fe05-4a95-a290-201b805fa284",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        560,
+        208
+      ],
+      "id": "d7451bcf-9649-4ef7-8538-e54eab11cd97",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "PVt9f0Qx7T3hJYzi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"title\": \"TestFailureTriageResult\",\n  \"additionalProperties\": false,\n  \"required\": [\n    \"classification\",\n    \"is_actionable\",\n    \"confidence_score\",\n    \"confidence_level\",\n    \"needs_human_review\",\n    \"reasoning\",\n    \"evidence\",\n    \"recommended_action\",\n    \"jira\"\n  ],\n  \"properties\": {\n    \"classification\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Genuine Defect\",\n        \"Product Bug\",\n        \"Flaky Test\",\n        \"Environment Issue\",\n        \"Network Issue\",\n        \"Expired Data\",\n        \"Locator Change\"\n      ]\n    },\n    \"is_actionable\": {\n      \"type\": \"boolean\",\n      \"description\": \"True only when classification is Genuine Defect or Product Bug.\"\n    },\n    \"confidence_score\": {\n      \"type\": \"integer\",\n      \"minimum\": 0,\n      \"maximum\": 100\n    },\n    \"confidence_level\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"High\",\n        \"Medium\",\n        \"Low\"\n      ]\n    },\n    \"needs_human_review\": {\n      \"type\": \"boolean\",\n      \"description\": \"True whenever confidence_score is less than 70.\"\n    },\n    \"reasoning\": {\n      \"type\": \"string\"\n    },\n    \"evidence\": {\n      \"type\": \"array\",\n      \"minItems\": 1,\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"recommended_action\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"Create Jira ticket\",\n        \"Retry / mark test as flaky\",\n        \"Escalate to DevOps\",\n        \"Investigate network/service dependency\",\n        \"Refresh test data\",\n        \"Update locator\",\n        \"Manual review required\"\n      ]\n    },\n    \"jira\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"required\": [\n        \"should_create\",\n        \"summary\",\n        \"description\",\n        \"priority\",\n        \"labels\"\n      ],\n      \"properties\": {\n        \"should_create\": {\n          \"type\": \"boolean\"\n        },\n        \"summary\": {\n          \"type\": \"string\",\n          \"maxLength\": 120\n        },\n        \"description\": {\n          \"type\": \"string\"\n        },\n        \"priority\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"\",\n            \"Highest\",\n            \"High\",\n            \"Medium\"\n          ]\n        },\n        \"labels\": {\n          \"type\": \"array\",\n          \"items\": {\n            \"type\": \"string\"\n          }\n        }\n      }\n    }\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        208
+      ],
+      "id": "7d1ed2c0-604b-4faa-9834-0b1776e0756b",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "resume": "form",
+        "formTitle": "Jira Creation",
+        "formDescription": "=\n  AI CLASSIFICATION ANALYSIS\n===================================================\n\n• Classification:        {{ $json.output.classification }}\n• Confidence Score:      {{ $json.output.confidence_score }}% ({{ $json.output.confidence_level }})\n• Actionable Defect:     {{ $json.output.is_actionable ? 'YES' : 'NO' }}\n• Recommended Action:    {{ $json.output.recommended_action }}\n\n---------------------------------------------------\n  AI REASONING\n---------------------------------------------------\n{{ $json.output.reasoning }}\n\n---------------------------------------------------\n  EVIDENCE FOUND\n---------------------------------------------------\n{{ Array.isArray($json.output.evidence) ? $json.output.evidence.join('\\n') : $json.output.evidence }}\n\n===================================================\nDo you want to override the AI recommendation and create/update a Jira ticket anyway?",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "=Decision Making",
+              "fieldType": "radio",
+              "defaultValue": "Yes, Proceed with JIRA Ticket creation!!",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Yes, Proceed with JIRA Ticket creation!!"
+                  },
+                  {
+                    "option": "No, Reject it!!"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "6c9b22fe-f1c7-4624-8317-618e947c41a0",
+      "name": "Wait",
+      "webhookId": "1f2423f4-4eca-4dd9-9c38-29f55279729d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "f9591b15-b08e-4932-94d8-1056456e24a3",
+              "leftValue": "={{ $json['Decision Making'] }}",
+              "rightValue": "Yes, Proceed with JIRA Ticket creation!!",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "8345c5d7-1783-4993-90f3-bf2ea65991cc",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "value": "10000",
+          "mode": "list",
+          "cachedResultName": "QA Testing-GEN AI OCT"
+        },
+        "issueType": {
+          "__rl": true,
+          "value": "10006",
+          "mode": "list",
+          "cachedResultName": "Bug"
+        },
+        "summary": "=Defect Triage : {{ $('Basic LLM Chain').item.json.output.evidence[1] }}",
+        "additionalFields": {
+          "description": "={{ $('Basic LLM Chain').item.json.output.reasoning }}"
+        }
+      },
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -64
+      ],
+      "id": "c780667f-c73a-4ffa-a2c6-38521cf8b563",
+      "name": "Create an issue",
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "9o1hRJz2F8rvDiXl",
+          "name": "Jira SW Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Jira Ticket has been created successfully.",
+        "completionMessage": "=Jira Ticket has been created successfully .\nTicket ID: {{ $json.key }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1664,
+        -64
+      ],
+      "id": "40e56dbc-75d3-4ae4-b890-651ad403edb3",
+      "name": "Form",
+      "webhookId": "cdd36967-1cc7-408a-a9cf-400f4cdf69eb"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Ticket creation has been Rejected",
+        "completionMessage": "=Rejection Reason :  {{ $('Basic LLM Chain').item.json.output.classification }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1488,
+        96
+      ],
+      "id": "821bfe4f-fae7-4bd8-9b31-c4cab6cdbf80",
+      "name": "Form1",
+      "webhookId": "b1005513-cb3d-4b40-bcfe-bac83f099fe1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create an issue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Form1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an issue": {
+      "main": [
+        [
+          {
+            "node": "Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "6db50a9a-ea1b-4556-96dd-f66fab11010a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e45eeb463977888eb33724e930a954b3ccd664af3fc182d1076d598acfc2cf78"
+  },
+  "nodeGroups": [],
+  "id": "UZIAUeXIF37w4y1M",
+  "tags": []
+}
