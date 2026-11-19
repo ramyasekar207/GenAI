@@ -1,0 +1,875 @@
+{
+  "name": "My Selenium to Playwright workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "TestCase Convertor - Selenium to Playwright",
+        "formDescription": "TestCase Convertor - Selenium to Playwright",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "GitHub File URL",
+              "placeholder": "GitHub URL"
+            },
+            {
+              "fieldLabel": "Target_Branch",
+              "defaultValue": "main"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "eba71e15-aca6-47f3-aa53-d29d8ae07fe0",
+      "name": "On form submission",
+      "webhookId": "68103ed8-d446-4d17-abf1-9f53ff624238"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a07c2962-2e81-4cd0-8ac0-c7cb23befb6f",
+              "name": "Owner",
+              "value": "={{ $json['GitHub File URL'].split('/')[3]}}",
+              "type": "string"
+            },
+            {
+              "id": "05af640a-b120-4a50-8755-1273744d1660",
+              "name": "Branch",
+              "value": "={{ $json.Target_Branch }}",
+              "type": "string"
+            },
+            {
+              "id": "2e7212b9-f26e-4004-b38f-e2e3aae95c62",
+              "name": "Repo_url",
+              "value": "={{ $json['GitHub File URL'].split('/')[4].replaceAll('.git','') }}",
+              "type": "string"
+            },
+            {
+              "id": "3a096975-aada-432c-a307-b7512a20fc0b",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a175905c-e373-41fd-b6a3-4af715603e4c",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.Owner }}/{{ $json.Repo_url }}/git/trees/{{$json.Branch}}?recursive=1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "0aa6acc7-1358-4b34-9825-66ff7867d23e",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "tree",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "5b18fd12-9a34-4f40-b4d7-0d683ce07b08",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "dd8b8f8e-85ce-48a2-9c41-d7d3245af248",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "blob",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "edd83d98-4c03-4d22-a6c8-9ce1519ebc5f",
+              "leftValue": "={{ $json.path }}",
+              "rightValue": "java",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        0
+      ],
+      "id": "54b26d12-b5a8-4004-be7f-ad3d1325afa4",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "c882500e-5a42-43b0-ac9b-2c732fbd562f",
+              "leftValue": "={{ $json.path }}",
+              "rightValue": "pages",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "9bc3ea22-8724-46a6-881c-751eb8a26c70",
+              "leftValue": "={{ $json.path }}",
+              "rightValue": "testcases",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        -16,
+        224
+      ],
+      "id": "c743c74e-0b9a-4222-b279-b38e5992a6ab",
+      "name": "Filter1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.path }}",
+                    "rightValue": "/pages",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "a5731924-ff98-42ed-8a52-e14fc78f10e1"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "a95cd427-3bcc-4004-94e5-670ab7bf03f2",
+                    "leftValue": "={{ $json.path }}",
+                    "rightValue": "/testcases",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        208,
+        224
+      ],
+      "id": "fa217d7d-16c3-4e5a-8691-ca10ff1c6b06",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        432,
+        224
+      ],
+      "id": "8ea83769-72d7-445a-b404-c27218ad45c4",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Edit Fields').first().json.Owner }}/{{ $('Edit Fields').first().json.Repo_url }}/contents/{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3.raw"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        240
+      ],
+      "id": "dcd17897-e256-48e1-b17a-5b6565df08d6",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=[P - PERSONA]\nYou are a Principal Test Automation Architect with 10+ years of expertise in migrating enterprise legacy Java Selenium frameworks into modern TypeScript Playwright architectures following exact framework patterns.\n\n[C - CONTEXT]\nYou are converting legacy Java Selenium Page Objects into Playwright TypeScript classes for the SonicFramework repository.\nFramework rules to enforce:\n1. Inheritance & Constructor:\n   - Extend `PlaywrightWrapper` imported from `../helpers/playwright`.\n   - Constructor MUST accept `(page: Page, context: BrowserContext)` and call `super(page, context)`.\n2. Selectors Object Pattern:\n   - Group ALL locators inside a `private readonly selectors` object at the top of the class.\n   - For dynamic selectors parameterized by inputs, use arrow functions: `appOrItem: (appName: string) => \\`//mark[text()='${appName}']\\``.\n3. Custom Wrapper Usage (CRITICAL):\n   - NEVER use raw `page.click()` or `page.fill()`.\n   - Use wrapper methods from `PlaywrightWrapper`:\n     * `await this.click(selector, elementName, elementType)` -> e.g., `await this.click(this.selectors.applauncherIcon, \"App Launcher\", \"Button\");`\n     * `await this.type(selector, elementName, value)` -> e.g., `await this.type(this.selectors.appItemSearchField, \"Search Field\", value);`\n     * `await this.validateElementVisibility(selector, elementName)` -> for visibility checks.\n     * `await this.waitSelector(selector)` -> for dynamic waits.\n4. Dont add return this or new pages constructor in the page classes.\n\n\n\n[I - INSTRUCTIONS]\n1. Parse the provided Java Selenium Page Object class.\n2. Extract all Selenium locators into the `selectors` object structure (including arrow functions for dynamic parameters).\n3. Replace Selenium actions with exact calls to `PlaywrightWrapper` helpers using descriptive labels for elementName and elementType.\n4. Mark every method `async` and `await` every wrapper operation.\n\n[E - EXAMPLE]\nInput (Java Selenium Page):\npublic class LoginPage extends ProjectSpecificMethods{\n\t\n\tpublic LoginPage enterUname(String uName) {\n\t\t\n\t\tWebElement user = locateElement(Locators.XPATH, \"//input[@id='username']\");\n\t\tclearAndType(user, uName);\n\t\treportStep(\"uName entered successfully\",\"pass\");\n\t\treturn this;\n\t\t\n\t}\n\t\n\tpublic LoginPage enterPwd(String pwd) {\n\t\tWebElement pass = locateElement(\"password\");\n\t\tclearAndType(pass, pwd);\n\t\treportStep(\"pwd entered successfully\",\"pass\");\n\t\treturn this;\n\t\t\n\t}\n\t\n\tpublic WelcomePage clickLogin() {\n\t\t\n\t\tclick(locateElement(\"Login\"));\n\t\treportStep(\"logged in successfully\",\"pass\");\n\t\t\n\t\treturn new WelcomePage();\n\t\t\n\t}\n\n}\n\nOutput (SonicFramework Playwright TypeScript):\nimport { BrowserContext, Page } from \"@playwright/test\";\nimport { PlaywrightWrapper } from \"../helpers/playwright\";\n\nexport class SalesforceHomePage extends PlaywrightWrapper {\n    private readonly selectors = {\n        applauncherIcon: \".slds-icon-waffle\",\n        viewAllBtn: `//button[text()=\"View All\"]`,\n        appItemSearchField: \"one-app-launcher-modal input.slds-input\",\n        appOrItem: (appName: string) => `//mark[text()='${appName}']`,\n    };\n\n    constructor(page: Page, context: BrowserContext) {\n        super(page, context);\n    }\n\n    public async appLauncher() {\n        await this.validateElementVisibility(this.selectors.applauncherIcon, \"App Launcher\");\n        await this.click(this.selectors.applauncherIcon, \"App Launcher\", \"Button\");\n    }\n\n    public async viewAll() {\n        await this.waitSelector(this.selectors.viewAllBtn);\n        await this.page.locator(this.selectors.viewAllBtn).highlight();\n        await this.click(this.selectors.viewAllBtn, \"View All\", \"Button\");\n    }\n\n    public async searchApp(value: string) {\n        await this.type(this.selectors.appItemSearchField, \"Search Field\", value);\n    }\n\n    public async selectApp(data: string) {\n        await this.click(this.selectors.appOrItem(data), data, \"Button\");\n    }\n\n  \n}\n\n[O - OUTPUT FORMAT]\n- Output ONLY valid TypeScript code inside ```typescript ... ``` blocks.\n- Do NOT include any intro, outro, or explanation outside the code block.\n\n[T - TONE]\nStrict, highly disciplined, production-grade enterprise software architecture tone.\n\n---\n[INPUT DATA]\n- File Path: {{ $('Loop Over Items').item.json.path }}\n- Source Code:\n{{ $json.data }}",
+        "needsFallback": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        816,
+        240
+      ],
+      "id": "dd6a24f4-a95d-45a0-a99d-e112477a8dff",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        736,
+        416
+      ],
+      "id": "6054c058-adb5-46e0-8602-f96bdabe2c93",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "PVt9f0Qx7T3hJYzi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        848,
+        432
+      ],
+      "id": "5ac3bd9e-c4d3-4be9-9d3d-cabe43e5eb7c",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "PVt9f0Qx7T3hJYzi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "output",
+        "options": {
+          "fileName": "={{ $('Loop Over Items').item.json.path.split('pages/')[1].replace('.java','')}}.txt"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        240
+      ],
+      "id": "86c12a9d-c264-4b05-8ad3-64a640e99883",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        240
+      ],
+      "id": "25f030bd-bf53-4f83-97ea-5542dc42846a",
+      "name": "Wait",
+      "webhookId": "8e0c305f-bb79-4ce8-90bf-b8310d5beaea"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3.raw"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        80,
+        704
+      ],
+      "id": "31664953-f60a-47d4-92a9-246a4d4dfc26",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=### **P - PERSONA**\nYou are a Principal Test Automation Architect who is an expert in both legacy Java Selenium (TestNG, POM, DataProvider) and modern Playwright TypeScript automation frameworks. You specialize in migrating legacy enterprise test suites to modern, fixture-driven Playwright structures without losing test intent, coverage, or metadata.\n\n---\n\n### **I - INSTRUCTION**\nYour task is to convert a legacy Java Selenium TestNG test case into a Playwright TypeScript spec file that fully adheres to our target project's framework conventions.\n\nKey Rules to follow during conversion:\n1. **Fixture Injection:** Replace explicit Page Object instantiations (`new LoginPage()`) with custom fixtures destructured inside the test function signature (e.g., `{ SalesforceLogin, SalesforceHome, SalesforceLead }`).\n2. **Metadata Annotations:** Map TestNG metadata (`@BeforeTest`, `testcaseName`, `testDescription`) into Playwright's `test.info().annotations.push({ type: 'TestCase', description: '...' })`.\n3. **Async Execution:** Ensure all framework page object method calls are properly awaited using `await`.\n4. **No Direct Page/Browser Calls:** Do not use `page.locator()` directly in the spec file. Interact strictly through custom page object fixture methods.\n\n---\n\n### **C - CONTEXT**\nWe are migrating our legacy Java Selenium + TestNG + Page Object Model test suite into a custom Playwright TypeScript automation framework (`SonicFramework`). \n\nIn our new Playwright architecture:\n- Page Objects are injected via custom test fixtures (`../customFixtures/salesForceFixture`).\n- Test metadata is added via `test.info().annotations`.\n- Data dynamic generation relies on helper utilities like `FakerData` (`../helpers/fakerUtils`).\n\n---\n\n### **E - EXAMPLE**\n\n#### **Input (Legacy Java Selenium TestNG Test Case):**\n```java\npackage com.salesforce.testcases;\n\nimport org.testng.annotations.BeforeTest;\nimport org.testng.annotations.Test;\nimport com.framework.testng.api.base.ProjectSpecificMethods;\nimport com.salesforce.pages.LoginPage;\n\npublic class TC_01 extends ProjectSpecificMethods {\n    @BeforeTest\n    public void setValues() {\n        excelFileName=\"Login\";\n        testcaseName=\"Login for salesforce application\";\n        testDescription=\"Login with positive credentials\";\n        authors=\"saran\";\n        category=\"smoke\";\n    }\n    \n    @Test(dataProvider=\"fetchData\")\n    public void runLogin(String uName, String pwd) {\n        LoginPage lp = new LoginPage();\n        lp.enterUname(uName)\n          .enterPwd(pwd)\n          .clickLogin();\n    }\n}\n\n```\n\n#### **Output (Target Playwright TypeScript Test Case):**\n\n```typescript\nimport { test } from \"../customFixtures/salesForceFixture\";\nimport { FakerData } from \"../helpers/fakerUtils\";\n\nlet firstName = FakerData.getFirstName();\n\ntest.use({ storageState: \"logins/salesforceLogin.json\" });\n\ntest(`Creating Lead`, async ({ SalesforceLogin, SalesforceHome, SalesforceLead }) => {\n    test.info().annotations.push(\n        { type: 'TestCase', description: 'Creating Lead' },\n    );\n\n    await SalesforceLogin.salesforceLogin(\"ADMINLOGIN\");\n    await SalesforceHome.appLauncher();\n    await SalesforceHome.viewAll();\n    await SalesforceHome.searchApp(\"Leads\");\n    await SalesforceHome.selectApp(\"Leads\");\n    await SalesforceLead.newButton();\n    await SalesforceLead.salutation(\"Mr.\");\n    await SalesforceLead.firstName(firstName);\n    await SalesforceLead.lastName(FakerData.getLastName());\n    await SalesforceLead.Company(FakerData.randomCityName());\n    await SalesforceLead.saveButton();\n    await SalesforceLead.verifiTheLeadAccount(firstName);\n});\n\n```\n\n---\n\n### **O - OUTPUT FORMAT**\n\nProvide the converted code inside a single, clean TypeScript code block. Followed by a brief list of key transformations made (e.g., mapped annotations, substituted fixtures, updated data handlers).\n\n---\n\n### **T - TONE**\n\nTechnical, concise, precise, and standard-compliant.\n\n---\n[INPUT DATA]\n- File Path: {{ $('Loop Over Items1').item.json.path }}\n- Source Code:\n{{ $json.data }}",
+        "needsFallback": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        272,
+        560
+      ],
+      "id": "b2879277-c320-474f-9e81-22ca47baee42",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        224,
+        816
+      ],
+      "id": "ceb88216-1ad3-436c-a128-78ac770abd51",
+      "name": "Groq Chat Model2",
+      "credentials": {
+        "groqApi": {
+          "id": "PVt9f0Qx7T3hJYzi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        320,
+        864
+      ],
+      "id": "8d1533d4-5e3a-4023-ab82-c99fc8dc13d0",
+      "name": "Groq Chat Model3",
+      "credentials": {
+        "groqApi": {
+          "id": "PVt9f0Qx7T3hJYzi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        672
+      ],
+      "id": "ead80adf-f212-4733-ba3e-790f258b3e05",
+      "name": "Wait1",
+      "webhookId": "8e0c305f-bb79-4ce8-90bf-b8310d5beaea"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -176,
+        688
+      ],
+      "id": "25df1c90-c055-41b9-9a61-dce35dab2138",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn $('Convert to File1').all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        512
+      ],
+      "id": "3db842ca-e68d-44b6-9104-2bef32d46071",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1104,
+        560
+      ],
+      "id": "12a508fd-b57d-4cc6-ba1e-27cbd9db0091",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\n\nconst mergedItem = {\n  json: {},\n  binary: {},\n};\n\ninputItems.forEach((currentItem, index) => {\n  mergedItem.binary[`file${index + 1}`] = currentItem.binary.data;\n});\n\nreturn [mergedItem];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        560
+      ],
+      "id": "4fbc0dca-25f5-48ca-acb0-fa76196662ba",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "compress",
+        "binaryPropertyName": "={{ Object.keys($binary).join(\",\") }}",
+        "fileName": "playwright_pages.zip"
+      },
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1504,
+        560
+      ],
+      "id": "dd3a40f1-866b-4764-8adb-a849b085555a",
+      "name": "Compression"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Playwright code conversion completed",
+        "completionMessage": "All Pages and testcases have been converted to playwright . Check the logs in your current n8n workflow execution to download the files",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        784
+      ],
+      "id": "0e848bb6-75bf-401b-94f2-593663528ac2",
+      "name": "Form",
+      "webhookId": "fa457b97-dc96-44f2-bedc-90c2328183d1"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "output",
+        "options": {
+          "fileName": "={{ $('Loop Over Items1').item.json.path.split('testcases/')[1].replace('.java','')}}.txt"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        656
+      ],
+      "id": "78104777-1e13-42e6-a1c9-86f38c2cf2fd",
+      "name": "Convert to File1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Filter1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Convert to File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Compression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compression": {
+      "main": [
+        [
+          {
+            "node": "Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File1": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "8353d93d-0409-457f-9830-e0427514618a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e45eeb463977888eb33724e930a954b3ccd664af3fc182d1076d598acfc2cf78"
+  },
+  "nodeGroups": [],
+  "id": "183n3q7Eer7BVokX",
+  "tags": []
+}
